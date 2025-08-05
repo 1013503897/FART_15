@@ -1,0 +1,26 @@
+From c838bd6699b30a5f99d26c6729f7745467e446e1 Mon Sep 17 00:00:00 2001
+From: weixingyu <weixingyu@360.cn>
+Date: Wed, 6 Aug 2025 00:55:28 +0800
+Subject: [PATCH] feat(libcore): Modify dalvik.system.DexFile
+
+Change-Id: Ia8636ae55ecce3b7b19a724f45672c0120b62975
+---
+ dalvik/src/main/java/dalvik/system/DexFile.java | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/dalvik/src/main/java/dalvik/system/DexFile.java b/dalvik/src/main/java/dalvik/system/DexFile.java
+index 8d73604e000..5d93119bf94 100644
+--- a/dalvik/src/main/java/dalvik/system/DexFile.java
++++ b/dalvik/src/main/java/dalvik/system/DexFile.java
+@@ -467,6 +467,8 @@ public final class DexFile {
+             throws ClassNotFoundException, NoClassDefFoundError;
+     @UnsupportedAppUsage
+     private static native String[] getClassNameList(Object cookie);
++    // fart-add
++    private static native void dumpMethodCode(Object m);
+     private static native boolean isBackedByOatFile(Object cookie);
+     private static native void setTrusted(Object cookie);
+     /*
+-- 
+2.43.0
+

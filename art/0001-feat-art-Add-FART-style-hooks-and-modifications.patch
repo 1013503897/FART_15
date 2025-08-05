@@ -1,0 +1,435 @@
+From 0a85abe9a6aaa83c613079e9118c7262c1a53d10 Mon Sep 17 00:00:00 2001
+From: weixingyu <weixingyu@360.cn>
+Date: Wed, 6 Aug 2025 00:55:27 +0800
+Subject: [PATCH] feat(art): Add FART-style hooks and modifications
+
+Change-Id: Ie324f19e93ea2c8af69a18dd53a314761ca33ad2
+---
+ runtime/art_method.cc                      | 305 +++++++++++++++++++++
+ runtime/interpreter/interpreter.cc         |   8 +
+ runtime/native/dalvik_system_DexFile.cc    |  19 ++
+ runtime/native/java_lang_reflect_Method.cc |   7 +
+ 4 files changed, 339 insertions(+)
+
+diff --git a/runtime/art_method.cc b/runtime/art_method.cc
+index a03df5cc2f..ab0e8bc0ca 100644
+--- a/runtime/art_method.cc
++++ b/runtime/art_method.cc
+@@ -54,7 +54,306 @@
+ #include "scoped_thread_state_change-inl.h"
+ #include "vdex_file.h"
+ 
++
++// fart-add
++#include <sys/syscall.h>
++#include <sys/types.h>
++#include <sys/stat.h>
++#include <fcntl.h>
++#include "runtime.h"
++#include <android/log.h>
++#include <assert.h>
++#include <errno.h>
++#include <fcntl.h>
++#include <pthread.h>
++#include <stdarg.h>
++#include <stddef.h>
++#include <stdlib.h>
++#include <string.h>
++#include <sys/mman.h>
++#include <sys/socket.h>
++#include <sys/types.h>
++#include <sys/uio.h>
++#include <sys/un.h>
++#include <time.h>
++#include <unistd.h>
++
++// fart-add
++#define gettidv1() syscall(__NR_gettid)
++#define LOG_TAG "ActivityThread"
++#define ALOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
++
+ namespace art HIDDEN {
++// fart-add
++uint8_t* codeitem_end(const uint8_t **pData){
++  uint32_t num_of_list = DecodeUnsignedLeb128(pData);
++  for (;num_of_list>0;num_of_list--) {
++    int32_t num_of_handlers=DecodeSignedLeb128(pData);
++    int num=num_of_handlers;
++    if (num_of_handlers<=0) {
++      num=-num_of_handlers;
++    }
++    for (; num > 0; num--) {
++      DecodeUnsignedLeb128(pData);
++      DecodeUnsignedLeb128(pData);
++    }
++    if (num_of_handlers<=0) {
++      DecodeUnsignedLeb128(pData);
++    }
++  }
++  return (uint8_t*)(*pData);
++}
++
++// fart-add
++extern "C" char *base64_encode(char *str,long str_len,long* outlen){
++  long len;
++  char *res;
++  int i,j;
++  const char *base64_table="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
++
++  if(str_len % 3 == 0)
++    len=str_len/3*4;
++  else
++    len=(str_len/3+1)*4;
++
++  res=(char*)malloc(sizeof(char)*(len+1));
++  res[len]='\0';
++  *outlen=len;
++
++  for(i=0,j=0;i<len-2;j+=3,i+=4){
++    res[i]=base64_table[str[j]>>2];
++    res[i+1]=base64_table[(str[j]&0x3)<<4 | (str[j+1]>>4)];
++    res[i+2]=base64_table[(str[j+1]&0xf)<<2 | (str[j+2]>>6)];
++    res[i+3]=base64_table[str[j+2]&0x3f];
++  }
++
++  switch(str_len % 3){
++    case 1:
++      res[i-2]='=';
++          res[i-1]='=';
++          break;
++    case 2:
++      res[i-1]='=';
++          break;
++  }
++  return res;
++}
++
++// fart-add
++extern "C" void dumpDexFileByExecute(ArtMethod* artmethod) REQUIRES_SHARED(Locks::mutator_lock_) {
++        char szCmdline[64] = {0};
++        char szProcName[256] = {0};
++        int procid = getpid();
++        snprintf(szCmdline, sizeof(szCmdline), "/proc/%d/cmdline", procid);
++        LOG(INFO) << "[FART][dumpDexFileByExecute] start";
++        int fcmdline = open(szCmdline, O_RDONLY);
++        if (fcmdline > 0) {
++          ssize_t result = read(fcmdline, szProcName, sizeof(szProcName) - 1);
++          if (result < 0) {
++            LOG(ERROR) << "[FART][dumpDexFileByExecute] Failed to read cmdline";
++          }
++          close(fcmdline);
++        }
++
++        if (szProcName[0] == '\0') return;
++
++        const DexFile* dex_file = artmethod->GetDexFile();
++        const uint8_t* begin_ = dex_file->Begin();
++        size_t size_ = dex_file->Size();
++        int size_int = static_cast<int>(size_);
++
++//        std::string base_dir = "/sdcard/fart/";
++//        std::string app_dir = base_dir + szProcName;
++//        std::string dex_path = app_dir + "/" + std::to_string(size_int) + "_dexfile_execute.dex";
++//        std::string classlist_path = app_dir + "/" + std::to_string(size_int) + "_classlist_execute.txt";
++
++//        mkdir(base_dir.c_str(), 0777);
++//        mkdir(app_dir.c_str(), 0777);
++
++        std::string app_dir = "/data/fart/" + std::string(szProcName) + "/";
++        std::string dex_path = app_dir + std::to_string(size_int) + "_dexfile_execute.dex";
++        std::string classlist_path = app_dir + std::to_string(size_int) + "_classlist_execute.txt";
++
++        mkdir(app_dir.c_str(), 0777);
++
++        int dexfilefp = open(dex_path.c_str(), O_RDONLY);
++        if (dexfilefp > 0) {
++          close(dexfilefp);
++        } else {
++          int fp = open(dex_path.c_str(), O_CREAT | O_APPEND | O_RDWR, 0666);
++          if (fp > 0) {
++            ssize_t w1 = write(fp, begin_, size_);
++            if (w1 < 0) {
++              LOG(ERROR) << "[FART][dumpDexFileByExecute] Failed to write dex file";
++            }
++            else{
++                LOG(INFO) << "[FART][dumpDexFileByExecute] finish" <<  dex_path;
++            }
++            fsync(fp);
++            close(fp);
++
++            int classlistfile = open(classlist_path.c_str(), O_CREAT | O_APPEND | O_RDWR, 0666);
++            if (classlistfile > 0) {
++              for (size_t ii = 0; ii < dex_file->NumClassDefs(); ++ii) {
++                const dex::ClassDef& class_def = dex_file->GetClassDef(ii);
++                const char* descriptor = dex_file->GetClassDescriptor(class_def);
++
++                ssize_t w2 = write(classlistfile, descriptor, strlen(descriptor));
++                if (w2 < 0) {
++                  LOG(ERROR) << "[FART][dumpDexFileByExecute] Failed to write class descriptor";
++                }
++
++                ssize_t w3 = write(classlistfile, "\n", 1);
++                if (w3 < 0) {
++                  LOG(ERROR) << "[FART][dumpDexFileByExecute] Failed to write newline";
++                }
++              }
++              fsync(classlistfile);
++              close(classlistfile);
++            }
++          }
++        }
++}
++
++// fart-add
++extern "C" void dumpArtMethod(ArtMethod* artmethod) REQUIRES_SHARED(Locks::mutator_lock_) {
++        LOG(INFO) << "[FART][dumpArtMethod] start";
++        char szProcName[256] = {0};
++        int procid = getpid();
++
++        // 获取进程名
++        char szCmdline[64] = {0};
++        snprintf(szCmdline, sizeof(szCmdline), "/proc/%d/cmdline", procid);
++        int fcmdline = open(szCmdline, O_RDONLY);
++        if (fcmdline > 0) {
++          ssize_t result = read(fcmdline, szProcName, sizeof(szProcName) - 1);
++          if (result < 0) {
++            LOG(ERROR) << "[FART][dumpArtMethod] read cmdline failed.";
++          }
++          close(fcmdline);
++        }
++
++        if (szProcName[0] == '\0') return;
++
++        const DexFile* dex_file = artmethod->GetDexFile();
++        const uint8_t* begin_ = dex_file->Begin();
++        size_t size_ = dex_file->Size();
++        int size_int = static_cast<int>(size_);
++
++        std::string app_dir = "/data/fart/" + std::string(szProcName) + "/";
++
++        mkdir(app_dir.c_str(), 0777);
++        // 路径拼接
++//        std::string baseDir = "/sdcard/fart/";
++//        std::string processDir = baseDir + szProcName;
++//        mkdir(baseDir.c_str(), 0777);
++//        mkdir(processDir.c_str(), 0777);
++
++        // 保存 dex 文件
++        std::string dexPath = app_dir + std::to_string(size_int) + "_dexfile.dex";
++        int dexfilefp = open(dexPath.c_str(), O_RDONLY);
++        if (dexfilefp > 0) {
++          close(dexfilefp);
++        } else {
++          int fp = open(dexPath.c_str(), O_CREAT | O_APPEND | O_RDWR, 0666);
++          if (fp > 0) {
++            ssize_t w = write(fp, begin_, size_);
++            if (w < 0) {
++              LOG(ERROR) << "[FART][dumpArtMethod] write dexfile failed -> " << dexPath;
++            }
++            else{
++                LOG(INFO) << "[FART][dumpArtMethod] write dexfile finish -> " <<  dexPath;
++            }
++            fsync(fp);
++            close(fp);
++
++            // 保存 class 列表
++            std::string classListPath = app_dir + std::to_string(size_int) + "_classlist.txt";
++            int classlistfile = open(classListPath.c_str(), O_CREAT | O_APPEND | O_RDWR, 0666);
++            if (classlistfile > 0) {
++              for (size_t i = 0; i < dex_file->NumClassDefs(); ++i) {
++                const dex::ClassDef& class_def = dex_file->GetClassDef(i);
++                const char* descriptor = dex_file->GetClassDescriptor(class_def);
++
++                ssize_t w1 = write(classlistfile, descriptor, strlen(descriptor));
++                if (w1 < 0) {
++                  LOG(ERROR) << "[FART][dumpArtMethod] write class descriptor failed";
++                }
++
++                ssize_t w2 = write(classlistfile, "\n", 1);
++                if (w2 < 0) {
++                  LOG(ERROR) << "[FART][dumpArtMethod] write newline failed";
++                }
++              }
++              fsync(classlistfile);
++              close(classlistfile);
++            }
++          }
++        }
++
++        // 保存指令码
++        const dex::CodeItem* code_item = artmethod->GetCodeItem();
++        if (LIKELY(code_item != nullptr)) {
++          uint8_t* item = (uint8_t*)code_item;
++          int code_item_len = 0;
++          CodeItemDataAccessor accessor(*dex_file, code_item);
++          if (accessor.TriesSize() > 0) {
++            const uint8_t* handler_data = accessor.GetCatchHandlerData();
++            uint8_t* tail = codeitem_end(&handler_data);
++            code_item_len = static_cast<int>(tail - item);
++          } else {
++            code_item_len = 16 + accessor.InsnsSizeInCodeUnits() * 2;
++          }
++
++          uint32_t method_idx = artmethod->GetDexMethodIndex();
++          int offset = static_cast<int>(item - begin_);
++          pid_t tid = gettidv1();
++          std::string insPath = app_dir + std::to_string(size_int) + "_ins_" + std::to_string(tid) + ".bin";
++
++          int fp2 = open(insPath.c_str(), O_CREAT | O_APPEND | O_RDWR, 0666);
++          if (fp2 > 0) {
++            lseek(fp2, 0, SEEK_END);
++            std::string header = "{name:" + artmethod->PrettyMethod() +
++                                 ",method_idx:" + std::to_string(method_idx) +
++                                 ",offset:" + std::to_string(offset) +
++                                 ",code_item_len:" + std::to_string(code_item_len) +
++                                 ",ins:";
++
++            ssize_t w3 = write(fp2, header.c_str(), header.length());
++            if (w3 < 0) {
++              LOG(ERROR) << "[FART][dumpArtMethod] write header failed";
++            }
++
++            long outlen = 0;
++            char* base64result = base64_encode((char*)item, (long)code_item_len, &outlen);
++            if (base64result != nullptr) {
++              ssize_t w4 = write(fp2, base64result, outlen);
++              if (w4 < 0) {
++                LOG(ERROR) << "[FART][dumpArtMethod] write base64 ins failed";
++              }
++              free(base64result);
++            }
++
++            ssize_t w5 = write(fp2, "};", 2);
++            if (w5 < 0) {
++              LOG(ERROR) << "[FART][dumpArtMethod] write tail failed";
++            }
++
++            fsync(fp2);
++            close(fp2);
++          }
++        }
++}
++
++// fart-add
++extern "C" void myfartInvoke(ArtMethod* artmethod)  REQUIRES_SHARED(Locks::mutator_lock_) {
++        JValue *result=nullptr;
++        Thread *self=nullptr;
++        uint32_t temp=6;
++        uint32_t* args=&temp;
++        uint32_t args_size=6;
++        artmethod->Invoke(self, args, args_size, result, "fart");
++}
+ 
+ using android::base::StringPrintf;
+ 
+@@ -364,6 +663,12 @@ uint32_t ArtMethod::FindCatchBlock(Handle<mirror::Class> exception_type,
+ NO_STACK_PROTECTOR
+ void ArtMethod::Invoke(Thread* self, uint32_t* args, uint32_t args_size, JValue* result,
+                        const char* shorty) {
++  // fart-add
++  if (self == nullptr) {
++    dumpArtMethod(this);
++    return;
++  }
++
+   if (UNLIKELY(__builtin_frame_address(0) < self->GetStackEnd<kNativeStackType>())) {
+     ThrowStackOverflowError<kNativeStackType>(self);
+     return;
+diff --git a/runtime/interpreter/interpreter.cc b/runtime/interpreter/interpreter.cc
+index 2665d00c8b..d18b53e05d 100644
+--- a/runtime/interpreter/interpreter.cc
++++ b/runtime/interpreter/interpreter.cc
+@@ -36,6 +36,8 @@
+ #include "unstarted_runtime.h"
+ 
+ namespace art HIDDEN {
++// fart-add
++extern "C" void dumpDexFileByExecute(ArtMethod* artmethod);
+ namespace interpreter {
+ 
+ ALWAYS_INLINE static ObjPtr<mirror::Object> ObjArg(uint32_t arg)
+@@ -252,6 +254,12 @@ static inline JValue Execute(
+     JValue result_register,
+     bool stay_in_interpreter = false,
+     bool from_deoptimize = false) REQUIRES_SHARED(Locks::mutator_lock_) {
++  // fart-add
++  LOG(INFO) << "[FART][Execute]" << shadow_frame.GetMethod()->PrettyMethod();
++  if(strstr(shadow_frame.GetMethod()->PrettyMethod().c_str(),"<clinit>")!=nullptr) {
++      LOG(INFO) << "[FART][Execute][clinit]" << shadow_frame.GetMethod()->PrettyMethod();
++    dumpDexFileByExecute(shadow_frame.GetMethod());
++  }
+   DCHECK(!shadow_frame.GetMethod()->IsAbstract());
+   DCHECK(!shadow_frame.GetMethod()->IsNative());
+ 
+diff --git a/runtime/native/dalvik_system_DexFile.cc b/runtime/native/dalvik_system_DexFile.cc
+index a1d4f16d26..7181606649 100644
+--- a/runtime/native/dalvik_system_DexFile.cc
++++ b/runtime/native/dalvik_system_DexFile.cc
+@@ -57,6 +57,9 @@
+ #include "string_array_utils.h"
+ #include "thread-current-inl.h"
+ 
++// fart-add
++#include "scoped_fast_native_object_access-inl.h"
++
+ #ifdef ART_TARGET_ANDROID
+ #include <android/api-level.h>
+ #include <sys/system_properties.h>
+@@ -64,6 +67,11 @@
+ 
+ namespace art HIDDEN {
+ 
++// fart-add
++extern "C" void myfartInvoke(ArtMethod* artmethod);
++// fart-add
++extern "C" ArtMethod* jobject2ArtMethod(JNIEnv* env, jobject javaMethod);
++
+ // Should be the same as dalvik.system.DexFile.ENFORCE_READ_ONLY_JAVA_DCL
+ static constexpr uint64_t kEnforceReadOnlyJavaDcl = 218865702;
+ 
+@@ -562,6 +570,15 @@ static jobjectArray DexFile_getClassNameList(JNIEnv* env, jclass, jobject cookie
+       MakeTransformRange(descriptors, descriptor_to_dot)));
+ }
+ 
++// fart-add
++static void DexFile_dumpMethodCode(JNIEnv* env, jclass,jobject method) {
++  if(method!=nullptr) {
++    ArtMethod* proxy_method = jobject2ArtMethod(env, method);
++    myfartInvoke(proxy_method);
++  }
++  return;
++}
++
+ static jint GetDexOptNeeded(JNIEnv* env,
+                             const char* filename,
+                             const char* instruction_set,
+@@ -995,6 +1012,8 @@ static void DexFile_setTrusted(JNIEnv* env, jclass, jobject j_cookie) {
+ }
+ 
+ static JNINativeMethod gMethods[] = {
++    // fart-add
++    NATIVE_METHOD(DexFile, dumpMethodCode, "(Ljava/lang/Object;)V"),
+     NATIVE_METHOD(DexFile, closeDexFile, "(Ljava/lang/Object;)Z"),
+     NATIVE_METHOD(DexFile,
+                   defineClassNative,
+diff --git a/runtime/native/java_lang_reflect_Method.cc b/runtime/native/java_lang_reflect_Method.cc
+index 64b4b17d4c..327c289b08 100644
+--- a/runtime/native/java_lang_reflect_Method.cc
++++ b/runtime/native/java_lang_reflect_Method.cc
+@@ -34,6 +34,13 @@
+ 
+ namespace art HIDDEN {
+ 
++// fart-add
++extern "C" ArtMethod* jobject2ArtMethod(JNIEnv* env, jobject javaMethod) {
++  ScopedFastNativeObjectAccess soa(env);
++  ArtMethod* method = ArtMethod::FromReflectedMethod(soa, javaMethod);
++  return method;
++}
++
+ static jobject Method_getDefaultValue(JNIEnv* env, jobject javaMethod) {
+   ScopedFastNativeObjectAccess soa(env);
+   ArtMethod* method = ArtMethod::FromReflectedMethod(soa, javaMethod);
+-- 
+2.43.0
+
