@@ -16,7 +16,7 @@ index 8d73604e000..5d93119bf94 100644
              throws ClassNotFoundException, NoClassDefFoundError;
      @UnsupportedAppUsage
      private static native String[] getClassNameList(Object cookie);
-+    // fart-add
++    // wart-add
 +    private static native void dumpMethodCode(Object m);
      private static native boolean isBackedByOatFile(Object cookie);
      private static native void setTrusted(Object cookie);

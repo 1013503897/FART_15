@@ -16,7 +16,7 @@ index 48b74f2d0776..d80eec1d6834 100644
  
  package android.app;
  
-+// fart-add
++// wart-add
 +import android.app.Application;
 +import android.util.ArrayMap;
 +import java.io.BufferedReader;
@@ -41,7 +41,7 @@ index 48b74f2d0776..d80eec1d6834 100644
          }
      }
  
-+    // fart-add
++    // wart-add
 +    public static Field getClassField(ClassLoader classloader, String class_name,
 +                                      String filedName) {
 +
@@ -63,7 +63,7 @@ index 48b74f2d0776..d80eec1d6834 100644
 +
 +    }
 +
-+    // fart-add
++    // wart-add
 +    public static Object getClassFieldObject(ClassLoader classloader, String class_name, Object obj,
 +                                             String filedName) {
 +
@@ -89,7 +89,7 @@ index 48b74f2d0776..d80eec1d6834 100644
 +
 +    }
 +
-+    // fart-add
++    // wart-add
 +    public static Object invokeStaticMethod(String class_name,
 +                                            String method_name, Class[] pareTyple, Object[] pareVaules) {
 +
@@ -114,7 +114,7 @@ index 48b74f2d0776..d80eec1d6834 100644
 +
 +    }
 +
-+    // fart-add
++    // wart-add
 +    public static Object getFieldOjbect(String class_name, Object obj,
 +                                        String filedName) {
 +        try {
@@ -139,7 +139,7 @@ index 48b74f2d0776..d80eec1d6834 100644
 +
 +    }
 +
-+    // fart-add
++    // wart-add
 +    public static ClassLoader getClassloader() {
 +        ClassLoader resultClassloader = null;
 +        Object currentActivityThread = invokeStaticMethod(
@@ -158,7 +158,7 @@ index 48b74f2d0776..d80eec1d6834 100644
 +        return resultClassloader;
 +    }
 +
-+    // fart-add
++    // wart-add
 +    public static void loadClassAndInvoke(ClassLoader appClassloader, String eachclassname, Method dumpMethodCode_method) {
 +        Class resultclass = null;
 +        Log.i("ActivityThread", "go into loadClassAndInvoke->" + "classname:" + eachclassname);
@@ -218,26 +218,26 @@ index 48b74f2d0776..d80eec1d6834 100644
 +        }
 +    }
 +
-+    // fart-add
-+    public static void fart() {
++    // wart-add
++    public static void wart() {
 +        ClassLoader appClassloader = getClassloader();
 +        ClassLoader parentClassloader = appClassloader.getParent();
 +        if(!appClassloader.toString().contains("java.lang.BootClassLoader"))
 +        {
-+            fartWithClassloader(appClassloader);
++            wartWithClassloader(appClassloader);
 +        }
 +        while(parentClassloader != null){
 +            if(!parentClassloader.toString().contains("java.lang.BootClassLoader"))
 +            {
-+                fartWithClassloader(parentClassloader);
++                wartWithClassloader(parentClassloader);
 +            }
 +            parentClassloader = parentClassloader.getParent();
 +        }
 +    }
 +
-+    // fart-add
-+    public static void fartWithClassloader(ClassLoader appClassloader) {
-+        final String TAG = "FART";
++    // wart-add
++    public static void wartWithClassloader(ClassLoader appClassloader) {
++        final String TAG = "Wart";
 +
 +        List<Object> dexFilesArray = new ArrayList<>();
 +        Field pathList_Field;
@@ -350,8 +350,8 @@ index 48b74f2d0776..d80eec1d6834 100644
 +    }
 +
 +
-+    // fart-add
-+    public static void fartthread() {
++    // wart-add
++    public static void wartthread() {
 +        new Thread(() -> {
 +            try {
 +                Log.e("ActivityThread", "start sleep...");
@@ -360,10 +360,10 @@ index 48b74f2d0776..d80eec1d6834 100644
 +                Log.e("ActivityThread", "sleep interrupted", e);
 +                Thread.currentThread().interrupt();
 +            }
-+            Log.e("ActivityThread", "sleep over and start fart");
-+            fart();
-+            Log.e("ActivityThread", "fart run over");
-+        }, "fart-thread").start();
++            Log.e("ActivityThread", "sleep over and start wart");
++            wart();
++            Log.e("ActivityThread", "wart run over");
++        }, "wart-thread").start();
 +    }
 +
 +
@@ -382,8 +382,8 @@ index 48b74f2d0776..d80eec1d6834 100644
              }
          }
  
-+        // fart-add
-+        fartthread();
++        // wart-add
++        wartthread();
 +
          return activity;
      }

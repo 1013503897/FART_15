@@ -1,7 +1,7 @@
 From 0a85abe9a6aaa83c613079e9118c7262c1a53d10 Mon Sep 17 00:00:00 2001
 From: weixingyu <weixingyu@360.cn>
 Date: Wed, 6 Aug 2025 00:55:27 +0800
-Subject: [PATCH] feat(art): Add FART-style hooks and modifications
+Subject: [PATCH] feat(art): Add Wart-style hooks and modifications
 
 Change-Id: Ie324f19e93ea2c8af69a18dd53a314761ca33ad2
 ---
@@ -20,7 +20,7 @@ index a03df5cc2f..ab0e8bc0ca 100644
  #include "vdex_file.h"
  
 +
-+// fart-add
++// wart-add
 +#include <sys/syscall.h>
 +#include <sys/types.h>
 +#include <sys/stat.h>
@@ -43,13 +43,13 @@ index a03df5cc2f..ab0e8bc0ca 100644
 +#include <time.h>
 +#include <unistd.h>
 +
-+// fart-add
++// wart-add
 +#define gettidv1() syscall(__NR_gettid)
 +#define LOG_TAG "ActivityThread"
 +#define ALOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 +
  namespace art HIDDEN {
-+// fart-add
++// wart-add
 +uint8_t* codeitem_end(const uint8_t **pData){
 +  uint32_t num_of_list = DecodeUnsignedLeb128(pData);
 +  for (;num_of_list>0;num_of_list--) {
@@ -69,7 +69,7 @@ index a03df5cc2f..ab0e8bc0ca 100644
 +  return (uint8_t*)(*pData);
 +}
 +
-+// fart-add
++// wart-add
 +extern "C" char *base64_encode(char *str,long str_len,long* outlen){
 +  long len;
 +  char *res;
@@ -104,18 +104,18 @@ index a03df5cc2f..ab0e8bc0ca 100644
 +  return res;
 +}
 +
-+// fart-add
++// wart-add
 +extern "C" void dumpDexFileByExecute(ArtMethod* artmethod) REQUIRES_SHARED(Locks::mutator_lock_) {
 +        char szCmdline[64] = {0};
 +        char szProcName[256] = {0};
 +        int procid = getpid();
 +        snprintf(szCmdline, sizeof(szCmdline), "/proc/%d/cmdline", procid);
-+        LOG(INFO) << "[FART][dumpDexFileByExecute] start";
++        LOG(INFO) << "[Wart][dumpDexFileByExecute] start";
 +        int fcmdline = open(szCmdline, O_RDONLY);
 +        if (fcmdline > 0) {
 +          ssize_t result = read(fcmdline, szProcName, sizeof(szProcName) - 1);
 +          if (result < 0) {
-+            LOG(ERROR) << "[FART][dumpDexFileByExecute] Failed to read cmdline";
++            LOG(ERROR) << "[Wart][dumpDexFileByExecute] Failed to read cmdline";
 +          }
 +          close(fcmdline);
 +        }
@@ -127,7 +127,7 @@ index a03df5cc2f..ab0e8bc0ca 100644
 +        size_t size_ = dex_file->Size();
 +        int size_int = static_cast<int>(size_);
 +
-+//        std::string base_dir = "/sdcard/fart/";
++//        std::string base_dir = "/sdcard/wart/";
 +//        std::string app_dir = base_dir + szProcName;
 +//        std::string dex_path = app_dir + "/" + std::to_string(size_int) + "_dexfile_execute.dex";
 +//        std::string classlist_path = app_dir + "/" + std::to_string(size_int) + "_classlist_execute.txt";
@@ -135,24 +135,24 @@ index a03df5cc2f..ab0e8bc0ca 100644
 +//        mkdir(base_dir.c_str(), 0777);
 +//        mkdir(app_dir.c_str(), 0777);
 +
-+        std::string app_dir = "/data/fart/" + std::string(szProcName) + "/";
++        std::string app_dir = "/data/wart/" + std::string(szProcName) + "/";
 +        std::string dex_path = app_dir + std::to_string(size_int) + "_dexfile_execute.dex";
 +        std::string classlist_path = app_dir + std::to_string(size_int) + "_classlist_execute.txt";
 +
 +        mkdir(app_dir.c_str(), 0777);
 +
 +        int dexfilefp = open(dex_path.c_str(), O_RDONLY);
-+        if (dexfilefp > 0) {
++        if (dexfilefp >= 0) {
 +          close(dexfilefp);
 +        } else {
 +          int fp = open(dex_path.c_str(), O_CREAT | O_APPEND | O_RDWR, 0666);
 +          if (fp > 0) {
 +            ssize_t w1 = write(fp, begin_, size_);
 +            if (w1 < 0) {
-+              LOG(ERROR) << "[FART][dumpDexFileByExecute] Failed to write dex file";
++              LOG(ERROR) << "[Wart][dumpDexFileByExecute] Failed to write dex file";
 +            }
 +            else{
-+                LOG(INFO) << "[FART][dumpDexFileByExecute] finish" <<  dex_path;
++                LOG(INFO) << "[Wart][dumpDexFileByExecute] finish" <<  dex_path;
 +            }
 +            fsync(fp);
 +            close(fp);
@@ -165,12 +165,12 @@ index a03df5cc2f..ab0e8bc0ca 100644
 +
 +                ssize_t w2 = write(classlistfile, descriptor, strlen(descriptor));
 +                if (w2 < 0) {
-+                  LOG(ERROR) << "[FART][dumpDexFileByExecute] Failed to write class descriptor";
++                  LOG(ERROR) << "[Wart][dumpDexFileByExecute] Failed to write class descriptor";
 +                }
 +
 +                ssize_t w3 = write(classlistfile, "\n", 1);
 +                if (w3 < 0) {
-+                  LOG(ERROR) << "[FART][dumpDexFileByExecute] Failed to write newline";
++                  LOG(ERROR) << "[Wart][dumpDexFileByExecute] Failed to write newline";
 +                }
 +              }
 +              fsync(classlistfile);
@@ -180,9 +180,9 @@ index a03df5cc2f..ab0e8bc0ca 100644
 +        }
 +}
 +
-+// fart-add
++// wart-add
 +extern "C" void dumpArtMethod(ArtMethod* artmethod) REQUIRES_SHARED(Locks::mutator_lock_) {
-+        LOG(INFO) << "[FART][dumpArtMethod] start";
++        LOG(INFO) << "[Wart][dumpArtMethod] start";
 +        char szProcName[256] = {0};
 +        int procid = getpid();
 +
@@ -193,7 +193,7 @@ index a03df5cc2f..ab0e8bc0ca 100644
 +        if (fcmdline > 0) {
 +          ssize_t result = read(fcmdline, szProcName, sizeof(szProcName) - 1);
 +          if (result < 0) {
-+            LOG(ERROR) << "[FART][dumpArtMethod] read cmdline failed.";
++            LOG(ERROR) << "[Wart][dumpArtMethod] read cmdline failed.";
 +          }
 +          close(fcmdline);
 +        }
@@ -205,11 +205,11 @@ index a03df5cc2f..ab0e8bc0ca 100644
 +        size_t size_ = dex_file->Size();
 +        int size_int = static_cast<int>(size_);
 +
-+        std::string app_dir = "/data/fart/" + std::string(szProcName) + "/";
++        std::string app_dir = "/data/wart/" + std::string(szProcName) + "/";
 +
 +        mkdir(app_dir.c_str(), 0777);
 +        // 路径拼接
-+//        std::string baseDir = "/sdcard/fart/";
++//        std::string baseDir = "/sdcard/wart/";
 +//        std::string processDir = baseDir + szProcName;
 +//        mkdir(baseDir.c_str(), 0777);
 +//        mkdir(processDir.c_str(), 0777);
@@ -217,17 +217,17 @@ index a03df5cc2f..ab0e8bc0ca 100644
 +        // 保存 dex 文件
 +        std::string dexPath = app_dir + std::to_string(size_int) + "_dexfile.dex";
 +        int dexfilefp = open(dexPath.c_str(), O_RDONLY);
-+        if (dexfilefp > 0) {
++        if (dexfilefp >= 0) {
 +          close(dexfilefp);
 +        } else {
 +          int fp = open(dexPath.c_str(), O_CREAT | O_APPEND | O_RDWR, 0666);
 +          if (fp > 0) {
 +            ssize_t w = write(fp, begin_, size_);
 +            if (w < 0) {
-+              LOG(ERROR) << "[FART][dumpArtMethod] write dexfile failed -> " << dexPath;
++              LOG(ERROR) << "[Wart][dumpArtMethod] write dexfile failed -> " << dexPath;
 +            }
 +            else{
-+                LOG(INFO) << "[FART][dumpArtMethod] write dexfile finish -> " <<  dexPath;
++                LOG(INFO) << "[Wart][dumpArtMethod] write dexfile finish -> " <<  dexPath;
 +            }
 +            fsync(fp);
 +            close(fp);
@@ -242,12 +242,12 @@ index a03df5cc2f..ab0e8bc0ca 100644
 +
 +                ssize_t w1 = write(classlistfile, descriptor, strlen(descriptor));
 +                if (w1 < 0) {
-+                  LOG(ERROR) << "[FART][dumpArtMethod] write class descriptor failed";
++                  LOG(ERROR) << "[Wart][dumpArtMethod] write class descriptor failed";
 +                }
 +
 +                ssize_t w2 = write(classlistfile, "\n", 1);
 +                if (w2 < 0) {
-+                  LOG(ERROR) << "[FART][dumpArtMethod] write newline failed";
++                  LOG(ERROR) << "[Wart][dumpArtMethod] write newline failed";
 +                }
 +              }
 +              fsync(classlistfile);
@@ -286,7 +286,7 @@ index a03df5cc2f..ab0e8bc0ca 100644
 +
 +            ssize_t w3 = write(fp2, header.c_str(), header.length());
 +            if (w3 < 0) {
-+              LOG(ERROR) << "[FART][dumpArtMethod] write header failed";
++              LOG(ERROR) << "[Wart][dumpArtMethod] write header failed";
 +            }
 +
 +            long outlen = 0;
@@ -294,14 +294,14 @@ index a03df5cc2f..ab0e8bc0ca 100644
 +            if (base64result != nullptr) {
 +              ssize_t w4 = write(fp2, base64result, outlen);
 +              if (w4 < 0) {
-+                LOG(ERROR) << "[FART][dumpArtMethod] write base64 ins failed";
++                LOG(ERROR) << "[Wart][dumpArtMethod] write base64 ins failed";
 +              }
 +              free(base64result);
 +            }
 +
 +            ssize_t w5 = write(fp2, "};", 2);
 +            if (w5 < 0) {
-+              LOG(ERROR) << "[FART][dumpArtMethod] write tail failed";
++              LOG(ERROR) << "[Wart][dumpArtMethod] write tail failed";
 +            }
 +
 +            fsync(fp2);
@@ -310,14 +310,14 @@ index a03df5cc2f..ab0e8bc0ca 100644
 +        }
 +}
 +
-+// fart-add
-+extern "C" void myfartInvoke(ArtMethod* artmethod)  REQUIRES_SHARED(Locks::mutator_lock_) {
++// wart-add
++extern "C" void mywartInvoke(ArtMethod* artmethod)  REQUIRES_SHARED(Locks::mutator_lock_) {
 +        JValue *result=nullptr;
 +        Thread *self=nullptr;
 +        uint32_t temp=6;
 +        uint32_t* args=&temp;
 +        uint32_t args_size=6;
-+        artmethod->Invoke(self, args, args_size, result, "fart");
++        artmethod->Invoke(self, args, args_size, result, "wart");
 +}
  
  using android::base::StringPrintf;
@@ -326,7 +326,7 @@ index a03df5cc2f..ab0e8bc0ca 100644
  NO_STACK_PROTECTOR
  void ArtMethod::Invoke(Thread* self, uint32_t* args, uint32_t args_size, JValue* result,
                         const char* shorty) {
-+  // fart-add
++  // wart-add
 +  if (self == nullptr) {
 +    dumpArtMethod(this);
 +    return;
@@ -343,7 +343,7 @@ index 2665d00c8b..d18b53e05d 100644
  #include "unstarted_runtime.h"
  
  namespace art HIDDEN {
-+// fart-add
++// wart-add
 +extern "C" void dumpDexFileByExecute(ArtMethod* artmethod);
  namespace interpreter {
  
@@ -352,10 +352,10 @@ index 2665d00c8b..d18b53e05d 100644
      JValue result_register,
      bool stay_in_interpreter = false,
      bool from_deoptimize = false) REQUIRES_SHARED(Locks::mutator_lock_) {
-+  // fart-add
-+  LOG(INFO) << "[FART][Execute]" << shadow_frame.GetMethod()->PrettyMethod();
++  // wart-add
++  LOG(INFO) << "[Wart][Execute]" << shadow_frame.GetMethod()->PrettyMethod();
 +  if(strstr(shadow_frame.GetMethod()->PrettyMethod().c_str(),"<clinit>")!=nullptr) {
-+      LOG(INFO) << "[FART][Execute][clinit]" << shadow_frame.GetMethod()->PrettyMethod();
++      LOG(INFO) << "[Wart][Execute][clinit]" << shadow_frame.GetMethod()->PrettyMethod();
 +    dumpDexFileByExecute(shadow_frame.GetMethod());
 +  }
    DCHECK(!shadow_frame.GetMethod()->IsAbstract());
@@ -369,7 +369,7 @@ index a1d4f16d26..7181606649 100644
  #include "string_array_utils.h"
  #include "thread-current-inl.h"
  
-+// fart-add
++// wart-add
 +#include "scoped_fast_native_object_access-inl.h"
 +
  #ifdef ART_TARGET_ANDROID
@@ -379,9 +379,9 @@ index a1d4f16d26..7181606649 100644
  
  namespace art HIDDEN {
  
-+// fart-add
-+extern "C" void myfartInvoke(ArtMethod* artmethod);
-+// fart-add
++// wart-add
++extern "C" void mywartInvoke(ArtMethod* artmethod);
++// wart-add
 +extern "C" ArtMethod* jobject2ArtMethod(JNIEnv* env, jobject javaMethod);
 +
  // Should be the same as dalvik.system.DexFile.ENFORCE_READ_ONLY_JAVA_DCL
@@ -391,11 +391,11 @@ index a1d4f16d26..7181606649 100644
        MakeTransformRange(descriptors, descriptor_to_dot)));
  }
  
-+// fart-add
++// wart-add
 +static void DexFile_dumpMethodCode(JNIEnv* env, jclass,jobject method) {
 +  if(method!=nullptr) {
 +    ArtMethod* proxy_method = jobject2ArtMethod(env, method);
-+    myfartInvoke(proxy_method);
++    mywartInvoke(proxy_method);
 +  }
 +  return;
 +}
@@ -407,7 +407,7 @@ index a1d4f16d26..7181606649 100644
  }
  
  static JNINativeMethod gMethods[] = {
-+    // fart-add
++    // wart-add
 +    NATIVE_METHOD(DexFile, dumpMethodCode, "(Ljava/lang/Object;)V"),
      NATIVE_METHOD(DexFile, closeDexFile, "(Ljava/lang/Object;)Z"),
      NATIVE_METHOD(DexFile,
@@ -420,7 +420,7 @@ index 64b4b17d4c..327c289b08 100644
  
  namespace art HIDDEN {
  
-+// fart-add
++// wart-add
 +extern "C" ArtMethod* jobject2ArtMethod(JNIEnv* env, jobject javaMethod) {
 +  ScopedFastNativeObjectAccess soa(env);
 +  ArtMethod* method = ArtMethod::FromReflectedMethod(soa, javaMethod);
