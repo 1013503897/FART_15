@@ -34,9 +34,9 @@ if [ ! -d "$FART_PATH" ]; then
 fi
 
 # 检查补丁文件是否存在
-ART_PATCH="$FART_PATH/art/0001-feat-art-Add-FART-style-hooks-and-modifications.patch"
-FRAMEWORK_PATCH="$FART_PATH/frameworks/base/0001-feat-frameworks-Modify-ActivityThread-for-custom-log.patch"
-LIBCORE_PATCH="$FART_PATH/libcore/0001-feat-libcore-Modify-dalvik.system.DexFile.patch"
+ART_PATCH="$FART_PATH/art/art.patch"
+FRAMEWORK_PATCH="$FART_PATH/frameworks/base/frameworks.patch"
+LIBCORE_PATCH="$FART_PATH/libcore/libcore.patch"
 
 echo -e "${BLUE}检查补丁文件...${NC}"
 for patch in "$ART_PATCH" "$FRAMEWORK_PATCH" "$LIBCORE_PATCH"; do

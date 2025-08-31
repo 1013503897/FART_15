@@ -1,21 +1,8 @@
-From 0a85abe9a6aaa83c613079e9118c7262c1a53d10 Mon Sep 17 00:00:00 2001
-From: weixingyu <weixingyu@360.cn>
-Date: Wed, 6 Aug 2025 00:55:27 +0800
-Subject: [PATCH] feat(art): Add Wart-style hooks and modifications
-
-Change-Id: Ie324f19e93ea2c8af69a18dd53a314761ca33ad2
----
- runtime/art_method.cc                      | 305 +++++++++++++++++++++
- runtime/interpreter/interpreter.cc         |   8 +
- runtime/native/dalvik_system_DexFile.cc    |  19 ++
- runtime/native/java_lang_reflect_Method.cc |   7 +
- 4 files changed, 339 insertions(+)
-
 diff --git a/runtime/art_method.cc b/runtime/art_method.cc
-index a03df5cc2f..ab0e8bc0ca 100644
+index a03df5cc2f..d023035a0a 100644
 --- a/runtime/art_method.cc
 +++ b/runtime/art_method.cc
-@@ -54,7 +54,306 @@
+@@ -54,7 +54,288 @@
  #include "scoped_thread_state_change-inl.h"
  #include "vdex_file.h"
  
@@ -127,31 +114,20 @@ index a03df5cc2f..ab0e8bc0ca 100644
 +        size_t size_ = dex_file->Size();
 +        int size_int = static_cast<int>(size_);
 +
-+//        std::string base_dir = "/sdcard/wart/";
-+//        std::string app_dir = base_dir + szProcName;
-+//        std::string dex_path = app_dir + "/" + std::to_string(size_int) + "_dexfile_execute.dex";
-+//        std::string classlist_path = app_dir + "/" + std::to_string(size_int) + "_classlist_execute.txt";
-+
-+//        mkdir(base_dir.c_str(), 0777);
-+//        mkdir(app_dir.c_str(), 0777);
-+
 +        std::string app_dir = "/data/wart/" + std::string(szProcName) + "/";
 +        std::string dex_path = app_dir + std::to_string(size_int) + "_dexfile_execute.dex";
 +        std::string classlist_path = app_dir + std::to_string(size_int) + "_classlist_execute.txt";
 +
 +        mkdir(app_dir.c_str(), 0777);
 +
-+        int dexfilefp = open(dex_path.c_str(), O_RDONLY);
-+        if (dexfilefp >= 0) {
-+          close(dexfilefp);
-+        } else {
++        int dex_read_fp = open(dex_path.c_str(), O_RDONLY);
++        if (dex_read_fp < 0) {
 +          int fp = open(dex_path.c_str(), O_CREAT | O_APPEND | O_RDWR, 0666);
 +          if (fp > 0) {
-+            ssize_t w1 = write(fp, begin_, size_);
-+            if (w1 < 0) {
-+              LOG(ERROR) << "[Wart][dumpDexFileByExecute] Failed to write dex file";
++            if (write(fp, begin_, size_) < 0) {
++              LOG(ERROR) << "[Wart][dumpDexFileByExecute] failed to write dex file" <<  dex_path;
 +            }
-+            else{
++            else {
 +                LOG(INFO) << "[Wart][dumpDexFileByExecute] finish" <<  dex_path;
 +            }
 +            fsync(fp);
@@ -159,17 +135,14 @@ index a03df5cc2f..ab0e8bc0ca 100644
 +
 +            int classlistfile = open(classlist_path.c_str(), O_CREAT | O_APPEND | O_RDWR, 0666);
 +            if (classlistfile > 0) {
-+              for (size_t ii = 0; ii < dex_file->NumClassDefs(); ++ii) {
-+                const dex::ClassDef& class_def = dex_file->GetClassDef(ii);
++              for (size_t i = 0; i < dex_file->NumClassDefs(); ++i) {
++                const dex::ClassDef& class_def = dex_file->GetClassDef(i);
 +                const char* descriptor = dex_file->GetClassDescriptor(class_def);
 +
-+                ssize_t w2 = write(classlistfile, descriptor, strlen(descriptor));
-+                if (w2 < 0) {
++                if (write(classlistfile, descriptor, strlen(descriptor)) < 0) {
 +                  LOG(ERROR) << "[Wart][dumpDexFileByExecute] Failed to write class descriptor";
 +                }
-+
-+                ssize_t w3 = write(classlistfile, "\n", 1);
-+                if (w3 < 0) {
++                if(write(classlistfile, "\n", 1) < 0){
 +                  LOG(ERROR) << "[Wart][dumpDexFileByExecute] Failed to write newline";
 +                }
 +              }
@@ -178,6 +151,7 @@ index a03df5cc2f..ab0e8bc0ca 100644
 +            }
 +          }
 +        }
++        close(dex_read_fp);
 +}
 +
 +// wart-add
@@ -208,11 +182,6 @@ index a03df5cc2f..ab0e8bc0ca 100644
 +        std::string app_dir = "/data/wart/" + std::string(szProcName) + "/";
 +
 +        mkdir(app_dir.c_str(), 0777);
-+        // 路径拼接
-+//        std::string baseDir = "/sdcard/wart/";
-+//        std::string processDir = baseDir + szProcName;
-+//        mkdir(baseDir.c_str(), 0777);
-+//        mkdir(processDir.c_str(), 0777);
 +
 +        // 保存 dex 文件
 +        std::string dexPath = app_dir + std::to_string(size_int) + "_dexfile.dex";
@@ -322,13 +291,13 @@ index a03df5cc2f..ab0e8bc0ca 100644
  
  using android::base::StringPrintf;
  
-@@ -364,6 +663,12 @@ uint32_t ArtMethod::FindCatchBlock(Handle<mirror::Class> exception_type,
+@@ -364,6 +645,12 @@ uint32_t ArtMethod::FindCatchBlock(Handle<mirror::Class> exception_type,
  NO_STACK_PROTECTOR
  void ArtMethod::Invoke(Thread* self, uint32_t* args, uint32_t args_size, JValue* result,
                         const char* shorty) {
 +  // wart-add
 +  if (self == nullptr) {
-+    dumpArtMethod(this);
++    dumpArtMethod(this);    // 发起主动调用
 +    return;
 +  }
 +
@@ -336,7 +305,7 @@ index a03df5cc2f..ab0e8bc0ca 100644
      ThrowStackOverflowError<kNativeStackType>(self);
      return;
 diff --git a/runtime/interpreter/interpreter.cc b/runtime/interpreter/interpreter.cc
-index 2665d00c8b..d18b53e05d 100644
+index 2665d00c8b..1d64272625 100644
 --- a/runtime/interpreter/interpreter.cc
 +++ b/runtime/interpreter/interpreter.cc
 @@ -36,6 +36,8 @@
@@ -354,15 +323,15 @@ index 2665d00c8b..d18b53e05d 100644
      bool from_deoptimize = false) REQUIRES_SHARED(Locks::mutator_lock_) {
 +  // wart-add
 +  LOG(INFO) << "[Wart][Execute]" << shadow_frame.GetMethod()->PrettyMethod();
-+  if(strstr(shadow_frame.GetMethod()->PrettyMethod().c_str(),"<clinit>")!=nullptr) {
-+      LOG(INFO) << "[Wart][Execute][clinit]" << shadow_frame.GetMethod()->PrettyMethod();
-+    dumpDexFileByExecute(shadow_frame.GetMethod());
++  if(strstr(shadow_frame.GetMethod()->PrettyMethod().c_str(),"<clinit>")) {
++      LOG(INFO) << "[Wart][Execute][clinit]";
++      dumpDexFileByExecute(shadow_frame.GetMethod());
 +  }
    DCHECK(!shadow_frame.GetMethod()->IsAbstract());
    DCHECK(!shadow_frame.GetMethod()->IsNative());
  
 diff --git a/runtime/native/dalvik_system_DexFile.cc b/runtime/native/dalvik_system_DexFile.cc
-index a1d4f16d26..7181606649 100644
+index a1d4f16d26..fad80fed35 100644
 --- a/runtime/native/dalvik_system_DexFile.cc
 +++ b/runtime/native/dalvik_system_DexFile.cc
 @@ -57,6 +57,9 @@
@@ -413,7 +382,7 @@ index a1d4f16d26..7181606649 100644
      NATIVE_METHOD(DexFile,
                    defineClassNative,
 diff --git a/runtime/native/java_lang_reflect_Method.cc b/runtime/native/java_lang_reflect_Method.cc
-index 64b4b17d4c..327c289b08 100644
+index 64b4b17d4c..60e1d1a606 100644
 --- a/runtime/native/java_lang_reflect_Method.cc
 +++ b/runtime/native/java_lang_reflect_Method.cc
 @@ -34,6 +34,13 @@
@@ -430,6 +399,3 @@ index 64b4b17d4c..327c289b08 100644
  static jobject Method_getDefaultValue(JNIEnv* env, jobject javaMethod) {
    ScopedFastNativeObjectAccess soa(env);
    ArtMethod* method = ArtMethod::FromReflectedMethod(soa, javaMethod);
--- 
-2.43.0
-
